@@ -17,7 +17,7 @@ env/
 .venv/
 
 # Trained model weights (too large for GitHub)
-*.pth
+# *.pth  ← re-enabled: efficientnet_retinal.pth is only 15.6 MB
 *.pt
 *.onnx
 
