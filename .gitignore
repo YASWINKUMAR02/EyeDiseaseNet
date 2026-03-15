@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+yolo_env/
+venv/
+env/
+.venv/
+
+# Trained model weights (too large for GitHub)
+*.pth
+*.pt
+*.onnx
+
+# Dataset (too large for GitHub — use Google Drive / Kaggle)
+DE_MESSIDOR_EX/
+augmented_resized_V2/
+*.zip
+*.tar.gz
+
+# Outputs
+confusion_matrix.png
+
+# IDE / OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
