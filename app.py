@@ -7,6 +7,14 @@ import numpy as np
 import cv2
 import os
 
+# Grad-CAM
+try:
+    from pytorch_grad_cam import GradCAM
+    from pytorch_grad_cam.utils.image import show_cam_on_image
+    GRADCAM_AVAILABLE = True
+except ImportError:
+    GRADCAM_AVAILABLE = False
+
 st.set_page_config(
     page_title="RetinaAI — DR Screening",
     page_icon="◉",
@@ -191,6 +199,40 @@ def predict(model, pil_image):
         probs = torch.softmax(model(t),dim=1)[0].cpu().numpy()
     return int(np.argmax(probs)), probs
 
+
+def generate_gradcam(model, pil_image, class_idx):
+    """
+    Generate a Grad-CAM heatmap overlay for the predicted class.
+    Hooks into EfficientNet-B0's last convolutional block.
+    Returns a PIL Image with heatmap blended onto the original.
+    """
+    if not GRADCAM_AVAILABLE:
+        return None
+    try:
+        # Target: last convolutional block of EfficientNet-B0
+        target_layers = [model.features[-1]]
+        cam = GradCAM(model=model, target_layers=target_layers)
+
+        # Prepare input tensor
+        input_tensor = preprocess(pil_image).unsqueeze(0).to(DEVICE)
+
+        # Target class wrapper
+        from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+        targets = [ClassifierOutputTarget(class_idx)]
+
+        # Generate CAM
+        grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0]
+
+        # Prepare original image as float array [0,1]
+        img_resized = pil_image.resize((224, 224))
+        rgb_img = np.array(img_resized, dtype=np.float32) / 255.0
+
+        # Overlay heatmap on image
+        visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
+        return Image.fromarray(visualization)
+    except Exception:
+        return None
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Sidebar
 # ══════════════════════════════════════════════════════════════════════════════
@@ -337,6 +379,33 @@ with col_res:
               <div class="conf-pct">{pct:.1f}%</div>
             </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+        # Grad-CAM Section
+        if GRADCAM_AVAILABLE:
+            st.markdown("<div class='sec-label'>&#9670; Grad-CAM — Explainability Heatmap</div>", unsafe_allow_html=True)
+            with st.spinner("Generating Grad-CAM heatmap..."):
+                gradcam_img = generate_gradcam(model, pil_image, grade)
+            if gradcam_img is not None:
+                cam_col1, cam_col2 = st.columns(2, gap="medium")
+                with cam_col1:
+                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                    st.image(pil_image.resize((224,224)), use_container_width=True, caption="Original Fundus Image")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with cam_col2:
+                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                    st.image(gradcam_img, use_container_width=True, caption=f"Grad-CAM — Grade {grade} ({name}) activation regions")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown("""
+                <div class='glass-card' style='font-size:.8rem;color:#6b7280;line-height:1.7;'>
+                  <div class='sec-label'>&#9632; How to read the heatmap</div>
+                  <span style='color:#ef4444;font-weight:700;'>&#9632; Red/Warm</span> = regions the AI focused on most for this prediction (highest activation)<br/>
+                  <span style='color:#3b82f6;font-weight:700;'>&#9632; Blue/Cool</span> = regions that had little influence on the prediction<br/><br/>
+                  In diabetic retinopathy, important regions typically include the <strong>optic disc</strong>, <strong>macula</strong>, and areas with <strong>microaneurysms or haemorrhages</strong>.
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.info("Grad-CAM visualization could not be generated for this image.")
+        else:
+            st.info("Install `grad-cam` library to enable Grad-CAM explainability: `pip install grad-cam`")
 
         # Clinical note
         st.markdown(f"""
