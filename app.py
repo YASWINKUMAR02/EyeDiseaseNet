@@ -190,6 +190,17 @@ html, body, [class*="css"], .stApp {
   border-radius: 8px !important;
 }
 .stFileUploader section:hover { border-color: var(--primary-blue) !important; background: #f8fafc !important; }
+.stFileUploader [data-testid="stFileUploaderDropzone"] button {
+  background-color: var(--primary-blue) !important;
+  color: #ffffff !important;
+  border: none !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+}
+.stFileUploader [data-testid="stFileUploaderDropzone"] button:hover {
+  background-color: var(--primary-hover) !important;
+}
 
 /* ─── Status Board ───────────────────────────────────────────────────── */
 .int-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
