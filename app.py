@@ -7,13 +7,7 @@ import numpy as np
 import os
 import pandas as pd
 
-# Grad-CAM
-try:
-    from pytorch_grad_cam import GradCAM
-    from pytorch_grad_cam.utils.image import show_cam_on_image
-    GRADCAM_AVAILABLE = True
-except ImportError:
-    GRADCAM_AVAILABLE = False
+import matplotlib.cm as cm
 
 st.set_page_config(
     page_title="RetinaSense AI",
@@ -307,20 +301,65 @@ def draw_visuals(pil_img, coords, seg_mask):
             img = np.clip((overlay * 0.38) + (img * 0.62), 0, 255).astype(np.uint8)
     return Image.fromarray(img)
 
+class NativelySimpleGradCAM:
+    def __init__(self, model, target_layer):
+        self.model = model
+        self.gradients = None
+        self.activations = None
+
+        def forward_hook(module, input, output):
+            self.activations = output
+        def backward_hook(module, grad_input, grad_output):
+            self.gradients = grad_output[0]
+
+        target_layer.register_forward_hook(forward_hook)
+        target_layer.register_full_backward_hook(backward_hook)
+
+    def generate(self, input_tensor, class_idx):
+        self.model.eval()
+        self.model.zero_grad()
+        out = self.model(input_tensor)
+        
+        if isinstance(out, tuple): out = out[0]
+            
+        one_hot = torch.zeros_like(out)
+        one_hot[0][class_idx] = 1
+        out.backward(gradient=one_hot, retain_graph=True)
+
+        with torch.no_grad():
+            gradients = self.gradients.cpu().numpy()[0]
+            activations = self.activations.cpu().numpy()[0]
+            weights = np.mean(gradients, axis=(1, 2))
+            cam = np.zeros(activations.shape[1:], dtype=np.float32)
+            for i, w in enumerate(weights):
+                cam += w * activations[i]
+            cam = np.maximum(cam, 0)
+            cam -= np.min(cam)
+            if np.max(cam) != 0: cam /= np.max(cam)
+        return cam
+
+
 def generate_gradcam(model, pil_image, class_idx):
-    if not GRADCAM_AVAILABLE:
-        return None
     try:
-        from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-        target_layers = [model.features[-1]]
-        cam = GradCAM(model=model, target_layers=target_layers)
-        input_tensor  = preprocess(pil_image).unsqueeze(0).to(DEVICE)
-        targets       = [ClassifierOutputTarget(class_idx)]
-        grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0]
-        rgb_img       = np.array(pil_image.resize((224, 224)), dtype=np.float32) / 255.0
-        cam_result    = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
-        return Image.fromarray(cam_result).resize((512, 512))
-    except Exception:
+        target_layer = model.features[-1]
+        grad_cam = NativelySimpleGradCAM(model, target_layer)
+        input_tensor = preprocess(pil_image).unsqueeze(0).to(DEVICE)
+        input_tensor.requires_grad_(True)
+        
+        grayscale_cam = grad_cam.generate(input_tensor, class_idx)
+        
+        rgb_img = np.array(pil_image.resize((224, 224))).astype(np.float32) / 255.0
+        mask_img = Image.fromarray((grayscale_cam * 255).astype(np.uint8)).resize((224, 224), resample=Image.Resampling.LANCZOS)
+        mask_arr = np.array(mask_img).astype(np.float32) / 255.0
+        
+        colormap = cm.get_cmap('jet')
+        heatmap = colormap(mask_arr)[:, :, :3]
+        cam_result = heatmap + rgb_img * 0.5
+        cam_result = cam_result / np.max(cam_result)
+        
+        return Image.fromarray(np.uint8(255 * cam_result)).resize((512, 512))
+    except Exception as e:
+        print(f"Native GradCAM exception: {e}")
         return None
 
 # ── State Management ───────────────────────────────────────────────────────────
