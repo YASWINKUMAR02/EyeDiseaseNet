@@ -2,9 +2,8 @@ import streamlit as st
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
-from PIL import Image
+from PIL import Image, ImageFilter
 import numpy as np
-import cv2
 import os
 import pandas as pd
 
@@ -239,9 +238,8 @@ seg_preprocess = transforms.Compose([
 
 # ── Inference ──────────────────────────────────────────────────────────────────
 def run_guardrails(pil_image):
-    img  = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-    h, w = img.shape[:2]
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Get dimensions
+    w, h = pil_image.size
     results = []
     
     # Resolution Check
@@ -249,17 +247,23 @@ def run_guardrails(pil_image):
     results.append(("Resolution Check", ok, f"Current: {w}x{h} px" if ok else f"Current: {w}x{h} px (Min: 224x224)"))
     
     # Blur Status
-    sc = cv2.Laplacian(gray, cv2.CV_64F).var()
-    ok = sc >= 15.0
+    gray_img = pil_image.convert("L")
+    edges_img = gray_img.filter(ImageFilter.FIND_EDGES)
+    edges_array = np.array(edges_img)
+    sc = edges_array.var()
+    ok = sc >= 20.0
     results.append(("Blur Status", ok, "Sharp and in focus" if ok else "Image appears blurry"))
     
     # Lighting Quality
-    bri = np.mean(cv2.cvtColor(img, cv2.COLOR_BGR2HSV)[:, :, 2])
+    hsv_img = pil_image.convert("HSV")
+    v_channel = np.array(hsv_img)[:, :, 2]
+    bri = np.mean(v_channel)
     ok  = 40 <= bri <= 220
     results.append(("Lighting Quality", ok, "Optimal lighting" if ok else "Poor lighting (Too dark/overexposed)"))
     
     # Fundus Detected
-    cb  = float(np.mean([np.mean(c) for c in [gray[0:10, 0:10], gray[0:10, w-10:w], gray[h-10:h, 0:10], gray[h-10:h, w-10:w]]]))
+    gray_arr = np.array(gray_img)
+    cb  = float(np.mean([np.mean(c) for c in [gray_arr[0:10, 0:10], gray_arr[0:10, w-10:w], gray_arr[h-10:h, 0:10], gray_arr[h-10:h, w-10:w]]]))
     ok  = cb <= 50
     results.append(("Fundus Detected", ok, "Valid dark border found" if ok else "No dark border found - invalid image"))
     
@@ -288,15 +292,19 @@ def predict(model, dr_model, unet, pil_image):
     return dr_probs, dme_probs, coords, seg_mask
 
 def draw_visuals(pil_img, coords, seg_mask):
-    img = np.array(pil_img.resize((512, 512)))
+    pil_img_resized = pil_img.resize((512, 512))
+    img = np.array(pil_img_resized)
     w, h = 512, 512
     if seg_mask is not None:
         seg_colors = [(255, 80, 80), (80, 80, 255), (255, 230, 50), (220, 80, 220)]
         for i in range(min(4, seg_mask.shape[0])):
-            mask = cv2.resize(seg_mask[i], (w, h), interpolation=cv2.INTER_NEAREST)
+            mask_img = Image.fromarray(seg_mask[i])
+            mask_resized = mask_img.resize((w, h), resample=Image.NEAREST)
+            mask_arr = np.array(mask_resized)
+            
             overlay = img.copy()
-            overlay[mask > 0] = seg_colors[i]
-            cv2.addWeighted(overlay, 0.38, img, 0.62, 0, img)
+            overlay[mask_arr > 0] = seg_colors[i]
+            img = np.clip((overlay * 0.38) + (img * 0.62), 0, 255).astype(np.uint8)
     return Image.fromarray(img)
 
 def generate_gradcam(model, pil_image, class_idx):
