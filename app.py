@@ -21,15 +21,15 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --bg-main: #f0fdf4;
-  --bg-card: #ffffff;
-  --border-subtle: #e2e8f0;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --primary-blue: #0284c7;
-  --primary-hover: #0369a1;
-  --primary-green: #059669;
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --bg-main: #0B0E14;
+  --bg-card: #151B25;
+  --border-subtle: #2D3748;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --primary-blue: #38bdf8;
+  --primary-hover: #7dd3fc;
+  --primary-green: #34d399;
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
 }
 
 /* Cards */
@@ -40,12 +40,12 @@ st.markdown("""
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
   margin-bottom: 1.5rem;
-  color: #0f172a !important; /* Force dark text explicitly */
+  color: var(--text-main) !important;
 }
 
-/* Force dark text on native Streamlit markdown components inside cards */
+/* Force text on native Streamlit markdown components inside cards */
 .rs-card p, .rs-card h1, .rs-card h2, .rs-card h3, .rs-card h4, .rs-card h5, .rs-card h6, .rs-card div, .rs-card span, .rs-card li {
-  color: #0f172a !important;
+  color: var(--text-main) !important;
 }
 
 .rs-header {
@@ -58,7 +58,7 @@ st.markdown("""
 .rs-metric-val {
   font-size: 2rem;
   font-weight: 700;
-  color: #0f172a !important;
+  color: var(--text-main) !important;
 }
 
 /* Severity scale */
@@ -79,14 +79,14 @@ st.markdown("""
 .rs-guardrail {
   padding: 0.8rem;
   border-radius: 6px;
-  background-color: #f8fafc;
+  background-color: rgba(255, 255, 255, 0.05);
   border-left: 4px solid var(--border-subtle);
   margin-bottom: 0.5rem;
-  color: #0f172a !important;
+  color: var(--text-main) !important;
 }
 
 .rs-guardrail strong, .rs-guardrail p, .rs-guardrail div, .rs-guardrail span {
-  color: #0f172a !important;
+  color: var(--text-main) !important;
 }
 
 .rs-guardrail.pass { border-left-color: var(--primary-green); }
@@ -94,13 +94,13 @@ st.markdown("""
 
 /* File Uploader override */
 .stFileUploader section {
-  background: #ffffff !important;
+  background: var(--bg-card) !important;
   border: 1px dashed var(--border-subtle) !important;
   border-radius: 8px !important;
 }
 
 .stFileUploader section * {
-  color: #0f172a !important;
+  color: var(--text-main) !important;
 }
 
 .stFileUploader section button {
@@ -109,7 +109,7 @@ st.markdown("""
 }
 
 .stFileUploader section button, .stFileUploader section button * {
-  color: #ffffff !important;
+  color: #0B0E14 !important;
 }
 </style>
 """, unsafe_allow_html=True)
