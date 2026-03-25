@@ -398,7 +398,10 @@ if page == "Dashboard":
     with col2:
         last_prediction = "None"
         if st.session_state.analysis_results:
-            last_prediction = DR_INFO[st.session_state.analysis_results['grade']][0]
+            if st.session_state.analysis_results.get('fundus_ok'):
+                last_prediction = DR_INFO[st.session_state.analysis_results['grade']][0]
+            else:
+                last_prediction = "Invalid Image"
         st.markdown(f"<div class='rs-card'><div>Last Prediction</div><div class='rs-metric-val' style='font-size:1.5rem; line-height: 2.5rem;'>{last_prediction}</div></div>", unsafe_allow_html=True)
     with col3:
         st.markdown("<div class='rs-card'><div>Model Accuracy</div><div class='rs-metric-val'>88%</div></div>", unsafe_allow_html=True)
@@ -426,10 +429,16 @@ elif page == "Upload & Analysis":
                     checks = run_guardrails(pil_image)
                     fundus_ok = next((ok for n, ok, _ in checks if n == "Fundus Detected"), True)
                     
-                    dr_probs, dme_probs, coords, seg_mask = predict(model, dr_model, unet, pil_image)
-                    grade = int(np.argmax(dr_probs))
-                    gradcam_img = generate_gradcam(dr_model if dr_model else model, pil_image, grade)
-                    visual_img  = draw_visuals(pil_image, coords, seg_mask)
+                    if fundus_ok:
+                        dr_probs, dme_probs, coords, seg_mask = predict(model, dr_model, unet, pil_image)
+                        grade = int(np.argmax(dr_probs))
+                        gradcam_img = generate_gradcam(dr_model if dr_model else model, pil_image, grade)
+                        visual_img  = draw_visuals(pil_image, coords, seg_mask)
+                    else:
+                        dr_probs, dme_probs, coords, seg_mask = None, None, None, None
+                        grade = None
+                        gradcam_img = None
+                        visual_img = None
                     
                     st.session_state.analysis_results = {
                         "checks": checks,
@@ -446,24 +455,25 @@ elif page == "Upload & Analysis":
         if st.session_state.analysis_results:
             res = st.session_state.analysis_results
             checks = res["checks"]
-            grade = res["grade"]
-            dr_probs = res["dr_probs"]
-            
-            name, css_class, urg_lbl, advice, details = DR_INFO[grade]
-            conf = dr_probs[grade] * 100
             
             st.markdown("<div class='rs-card'>", unsafe_allow_html=True)
             if not res["fundus_ok"]:
-                 st.error("⚠ Invalid Image: No valid fundus detected. Predictions may be inaccurate.")
+                 st.error("⚠ Invalid Image: No valid fundus detected. Predictions are withheld.")
+            else:
+                 grade = res["grade"]
+                 dr_probs = res["dr_probs"]
+                 name, css_class, urg_lbl, advice, details = DR_INFO[grade]
+                 conf = dr_probs[grade] * 100
                  
-            st.markdown("#### Prediction Output")
-            st.markdown(f"**Disease Class:** {name}")
-            st.markdown(f"**Confidence Score:** {conf:.1f}%")
-            st.markdown(f"**Recommendation:** {urg_lbl} - {advice}")
+                 st.markdown("#### Prediction Output")
+                 st.markdown(f"**Disease Class:** {name}")
+                 st.markdown(f"**Confidence Score:** {conf:.1f}%")
+                 st.markdown(f"**Recommendation:** {urg_lbl} - {advice}")
             st.markdown("</div>", unsafe_allow_html=True)
             
-            st.markdown("#### DR Severity Scale")
-            st.markdown(f"<div class='rs-severity-box {css_class}'>{name}</div>", unsafe_allow_html=True)
+            if res["fundus_ok"]:
+                st.markdown("#### DR Severity Scale")
+                st.markdown(f"<div class='rs-severity-box {css_class}'>{name}</div>", unsafe_allow_html=True)
             
             st.markdown("#### Validation Guardrails")
             for check_name, ok, msg in checks:
@@ -471,12 +481,16 @@ elif page == "Upload & Analysis":
                 css_state = "pass" if ok else "fail"
                 st.markdown(f"<div class='rs-guardrail {css_state}'><strong>{icon} - {check_name}</strong><br/>{msg}</div>", unsafe_allow_html=True)
                 
-            report_content = f"RetinaSense AI - Analysis Report\n\n" \
-                             f"Disease Class: {name}\n" \
-                             f"Confidence Score: {conf:.1f}%\n" \
-                             f"Recommendation: {urg_lbl}\n" \
-                             f"Details: {details}\n\n" \
-                             f"Guardrails Validation:\n"
+            report_content = f"RetinaSense AI - Analysis Report\n\n"
+            if res["fundus_ok"]:
+                report_content += f"Disease Class: {name}\n" \
+                                  f"Confidence Score: {conf:.1f}%\n" \
+                                  f"Recommendation: {urg_lbl}\n" \
+                                  f"Details: {details}\n\n"
+            else:
+                report_content += "Status: Invalid Image (No valid fundus detected)\n\n"
+                
+            report_content += "Guardrails Validation:\n"
             for check_name, ok, msg in checks:
                 str_ok = 'Pass' if ok else 'Fail'
                 report_content += f"- {check_name}: {str_ok} ({msg})\n"
